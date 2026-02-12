@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  :root {
+    --bg: #1e1e2e;
+    --surface: #262637;
+    --surface2: #2e2e42;
+    --border: #3a3a52;
+    --text: #cdd6f4;
+    --text-dim: #7f849c;
+    --accent: #89b4fa;
+    --accent-hover: #74c7ec;
+    --green: #a6e3a1;
+    --red: #f38ba8;
+    --yellow: #f9e2af;
+    --orange: #fab387;
+    --pink: #f5c2e7;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-size: 12px;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Toolbar ── */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+
+  .toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .toolbar-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+    margin: 0 4px;
+  }
+
+  button {
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+
+  button:hover { background: var(--border); border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
+  button.primary:hover { background: var(--accent-hover); }
+  button.danger { border-color: var(--red); color: var(--red); }
+  button.danger:hover { background: var(--red); color: var(--bg); }
+
+  .badge {
+    background: var(--accent);
+    color: var(--bg);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--red);
+    flex-shrink: 0;
+  }
+  .status-dot.recording { background: var(--green); animation: pulse 1.5s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── Filter bar ── */
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .filter-bar input {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 11px;
+    outline: none;
+  }
+  .filter-bar input:focus { border-color: var(--accent); }
+  .filter-bar input::placeholder { color: var(--text-dim); }
+
+  .type-filters {
+    display: flex;
+    gap: 2px;
+  }
+
+  .type-filter {
+    padding: 3px 8px;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 10px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .type-filter:hover { color: var(--text); background: var(--surface2); }
+  .type-filter.active { color: var(--accent); background: var(--surface2); }
+
+  /* ── Request list ── */
+  .request-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .request-list::-webkit-scrollbar { width: 6px; }
+  .request-list::-webkit-scrollbar-track { background: transparent; }
+  .request-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .request-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.1s;
+    min-height: 32px;
+  }
+
+  .request-item:hover { background: var(--surface); }
+  .request-item.selected { background: var(--surface2); }
+
+  .request-item input[type="checkbox"] {
+    flex-shrink: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  .method {
+    font-weight: 700;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    min-width: 40px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .method.GET { background: #89b4fa22; color: var(--accent); }
+  .method.POST { background: #a6e3a122; color: var(--green); }
+  .method.PUT { background: #f9e2af22; color: var(--yellow); }
+  .method.PATCH { background: #fab38722; color: var(--orange); }
+  .method.DELETE { background: #f38ba822; color: var(--red); }
+  .method.OPTIONS { background: #f5c2e722; color: var(--pink); }
+
+  .request-url {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+    font-size: 11px;
+  }
+
+  .request-status {
+    font-size: 11px;
+    font-weight: 600;
+    flex-shrink: 0;
+    min-width: 30px;
+    text-align: right;
+  }
+  .request-status.ok { color: var(--green); }
+  .request-status.redirect { color: var(--yellow); }
+  .request-status.error { color: var(--red); }
+
+  .request-type {
+    font-size: 10px;
+    color: var(--text-dim);
+    min-width: 40px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .request-size {
+    font-size: 10px;
+    color: var(--text-dim);
+    min-width: 50px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* ── Empty state ── */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-dim);
+    gap: 8px;
+    padding: 40px;
+    text-align: center;
+  }
+
+  .empty-state .icon { font-size: 32px; opacity: 0.5; }
+  .empty-state .title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .empty-state .subtitle { font-size: 12px; line-height: 1.5; }
+
+  /* ── Copy feedback ── */
+  .toast {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%) translateY(60px);
+    background: var(--green);
+    color: var(--bg);
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 12px;
+    opacity: 0;
+    transition: all 0.3s ease;
+    z-index: 1000;
+    pointer-events: none;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+  /* ── Options row ── */
+  .options-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .options-row label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-dim);
+    cursor: pointer;
+    user-select: none;
+  }
+  .options-row label:hover { color: var(--text); }
+
+  select {
+    padding: 4px 6px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 11px;
+    outline: none;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="toolbar-group">
+    <div class="status-dot recording" id="statusDot"></div>
+    <span style="font-size:11px;font-weight:600;">Recording</span>
+    <span class="badge" id="countBadge">0</span>
+  </div>
+
+  <div class="toolbar-divider"></div>
+
+  <div class="toolbar-group">
+    <button id="btnSelectAll">Select All</button>
+    <button id="btnSelectNone">Select None</button>
+  </div>
+
+  <div class="toolbar-divider"></div>
+
+  <div class="toolbar-group">
+    <button class="primary" id="btnCopySelected">📋 Copy Selected</button>
+    <button class="primary" id="btnCopyAll">📋 Copy All</button>
+  </div>
+
+  <div class="toolbar-divider"></div>
+
+  <div class="toolbar-group options-row">
+    <label title="Include response bodies (can be large)">
+      <input type="checkbox" id="optResponseBody" checked> Responses
+    </label>
+    <label title="Include request bodies/payloads">
+      <input type="checkbox" id="optRequestBody" checked> Payloads
+    </label>
+    <label title="Include headers">
+      <input type="checkbox" id="optHeaders" checked> Headers
+    </label>
+    <label>
+      Truncate:
+      <select id="optTruncate">
+        <option value="0">No limit</option>
+        <option value="2000">2k chars</option>
+        <option value="5000" selected>5k chars</option>
+        <option value="10000">10k chars</option>
+        <option value="50000">50k chars</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="toolbar-divider"></div>
+
+  <button class="danger" id="btnClear">Clear</button>
+</div>
+
+<div class="filter-bar">
+  <input type="text" id="filterInput" placeholder="Filter by URL, method, or status...">
+  <div class="type-filters">
+    <button class="type-filter active" data-type="all">All</button>
+    <button class="type-filter" data-type="xhr">XHR</button>
+    <button class="type-filter" data-type="fetch">Fetch</button>
+    <button class="type-filter" data-type="doc">Doc</button>
+    <button class="type-filter" data-type="css">CSS</button>
+    <button class="type-filter" data-type="js">JS</button>
+    <button class="type-filter" data-type="img">Img</button>
+    <button class="type-filter" data-type="other">Other</button>
+  </div>
+</div>
+
+<div class="request-list" id="requestList">
+  <div class="empty-state">
+    <div class="icon">📡</div>
+    <div class="title">Listening for network requests...</div>
+    <div class="subtitle">
+      Interact with the page to capture requests.<br>
+      Select the ones you need, then hit Copy.
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Copied to clipboard!</div>
+
+<script>
+// ── State ──
+const requests = [];
+let activeTypeFilter = 'all';
+let textFilter = '';
+
+// ── DOM refs ──
+const listEl = document.getElementById('requestList');
+const countBadge = document.getElementById('countBadge');
+const filterInput = document.getElementById('filterInput');
+const toast = document.getElementById('toast');
+
+// ── Helpers ──
+function classifyType(entry) {
+  const url = entry.request.url.toLowerCase();
+  const mime = (entry.response.content.mimeType || '').toLowerCase();
+
+  if (mime.includes('html')) return 'doc';
+  if (mime.includes('css') || url.endsWith('.css')) return 'css';
+  if (mime.includes('javascript') || url.endsWith('.js')) return 'js';
+  if (mime.includes('image') || /\.(png|jpg|jpeg|gif|svg|webp|ico)/.test(url)) return 'img';
+  if (mime.includes('json') || mime.includes('xml') || mime.includes('form')) return 'xhr';
+  // Best-effort: check if it looks like an API call
+  if (/\/api\/|graphql|\?/.test(url) && !url.match(/\.(js|css|png|jpg|svg|woff)/)) return 'xhr';
+  return 'other';
+}
+
+function formatSize(bytes) {
+  if (!bytes || bytes <= 0) return '—';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function statusClass(status) {
+  if (status >= 200 && status < 300) return 'ok';
+  if (status >= 300 && status < 400) return 'redirect';
+  return 'error';
+}
+
+function shortUrl(url) {
+  try {
+    const u = new URL(url);
+    return u.pathname + u.search;
+  } catch { return url; }
+}
+
+// ── Capture requests ──
+chrome.devtools.network.onRequestFinished.addListener((entry) => {
+  const req = {
+    id: requests.length,
+    checked: false,
+    entry: entry,
+    type: classifyType(entry),
+    method: entry.request.method,
+    url: entry.request.url,
+    status: entry.response.status,
+    statusText: entry.response.statusText,
+    size: entry.response.content.size || entry.response.bodySize || 0,
+    requestHeaders: entry.request.headers,
+    requestBody: entry.request.postData ? entry.request.postData.text : null,
+    responseHeaders: entry.response.headers,
+    responseBody: null, // fetched on demand
+  };
+
+  // Fetch response body eagerly
+  entry.getContent((body, encoding) => {
+    req.responseBody = body;
+  });
+
+  requests.push(req);
+  countBadge.textContent = requests.length;
+  renderList();
+});
+
+// ── Render ──
+function matchesFilter(req) {
+  if (activeTypeFilter !== 'all' && req.type !== activeTypeFilter) return false;
+  if (textFilter) {
+    const q = textFilter.toLowerCase();
+    const haystack = `${req.method} ${req.url} ${req.status}`.toLowerCase();
+    if (!haystack.includes(q)) return false;
+  }
+  return true;
+}
+
+function renderList() {
+  const visible = requests.filter(matchesFilter);
+
+  if (visible.length === 0 && requests.length === 0) {
+    listEl.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">📡</div>
+        <div class="title">Listening for network requests...</div>
+        <div class="subtitle">Interact with the page to capture requests.<br>Select the ones you need, then hit Copy.</div>
+      </div>`;
+    return;
+  }
+
+  if (visible.length === 0) {
+    listEl.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">🔍</div>
+        <div class="title">No matching requests</div>
+        <div class="subtitle">Try adjusting your filter.</div>
+      </div>`;
+    return;
+  }
+
+  // Preserve scroll
+  const scrollTop = listEl.scrollTop;
+
+  listEl.innerHTML = visible.map(req => `
+    <div class="request-item ${req.checked ? 'selected' : ''}" data-id="${req.id}">
+      <input type="checkbox" ${req.checked ? 'checked' : ''} data-id="${req.id}">
+      <span class="method ${req.method}">${req.method}</span>
+      <span class="request-url" title="${req.url}">${shortUrl(req.url)}</span>
+      <span class="request-status ${statusClass(req.status)}">${req.status}</span>
+      <span class="request-type">${req.type}</span>
+      <span class="request-size">${formatSize(req.size)}</span>
+    </div>
+  `).join('');
+
+  listEl.scrollTop = scrollTop;
+}
+
+// ── Events ──
+listEl.addEventListener('change', (e) => {
+  if (e.target.type === 'checkbox') {
+    const id = parseInt(e.target.dataset.id);
+    requests[id].checked = e.target.checked;
+    renderList();
+  }
+});
+
+listEl.addEventListener('click', (e) => {
+  const item = e.target.closest('.request-item');
+  if (!item || e.target.type === 'checkbox') return;
+  const id = parseInt(item.dataset.id);
+  requests[id].checked = !requests[id].checked;
+  renderList();
+});
+
+filterInput.addEventListener('input', (e) => {
+  textFilter = e.target.value;
+  renderList();
+});
+
+document.querySelectorAll('.type-filter').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.type-filter').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeTypeFilter = btn.dataset.type;
+    renderList();
+  });
+});
+
+document.getElementById('btnSelectAll').addEventListener('click', () => {
+  requests.filter(matchesFilter).forEach(r => r.checked = true);
+  renderList();
+});
+
+document.getElementById('btnSelectNone').addEventListener('click', () => {
+  requests.forEach(r => r.checked = false);
+  renderList();
+});
+
+document.getElementById('btnClear').addEventListener('click', () => {
+  requests.length = 0;
+  countBadge.textContent = '0';
+  renderList();
+});
+
+// ── Format & Copy ──
+function formatHeaders(headers) {
+  if (!headers || headers.length === 0) return '  (none)';
+  return headers.map(h => `  ${h.name}: ${h.value}`).join('\n');
+}
+
+function maybeTruncate(text) {
+  if (!text) return '  (empty)';
+  const limit = parseInt(document.getElementById('optTruncate').value);
+  if (limit > 0 && text.length > limit) {
+    return text.substring(0, limit) + `\n  ... [truncated, ${text.length} total chars]`;
+  }
+  return text;
+}
+
+function tryPrettyJson(text) {
+  if (!text) return text;
+  try {
+    const obj = JSON.parse(text);
+    return JSON.stringify(obj, null, 2);
+  } catch {
+    return text;
+  }
+}
+
+function formatRequest(req, index) {
+  const showHeaders = document.getElementById('optHeaders').checked;
+  const showPayload = document.getElementById('optRequestBody').checked;
+  const showResponse = document.getElementById('optResponseBody').checked;
+
+  let parts = [];
+
+  parts.push(`════════════════════════════════════════`);
+  parts.push(`REQUEST #${index + 1}`);
+  parts.push(`════════════════════════════════════════`);
+  parts.push(`URL: ${req.url}`);
+  parts.push(`Method: ${req.method}`);
+  parts.push(`Status: ${req.status} ${req.statusText || ''}`);
+
+  if (showHeaders) {
+    parts.push('');
+    parts.push('── Request Headers ──');
+    parts.push(formatHeaders(req.requestHeaders));
+    parts.push('');
+    parts.push('── Response Headers ──');
+    parts.push(formatHeaders(req.responseHeaders));
+  }
+
+  if (showPayload && req.requestBody) {
+    parts.push('');
+    parts.push('── Request Body ──');
+    parts.push(maybeTruncate(tryPrettyJson(req.requestBody)));
+  }
+
+  if (showResponse && req.responseBody) {
+    parts.push('');
+    parts.push('── Response Body ──');
+    parts.push(maybeTruncate(tryPrettyJson(req.responseBody)));
+  }
+
+  parts.push('');
+  return parts.join('\n');
+}
+
+function copyToClipboard(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand('copy');
+  document.body.removeChild(ta);
+
+  toast.textContent = '✓ Copied to clipboard!';
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2000);
+}
+
+document.getElementById('btnCopySelected').addEventListener('click', () => {
+  const selected = requests.filter(r => r.checked);
+  if (selected.length === 0) {
+    toast.textContent = 'No requests selected';
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2000);
+    return;
+  }
+  const text = selected.map((r, i) => formatRequest(r, i)).join('\n');
+  const header = `Network Capture — ${selected.length} request(s) — ${new Date().toISOString()}\n\n`;
+  copyToClipboard(header + text);
+});
+
+document.getElementById('btnCopyAll').addEventListener('click', () => {
+  const visible = requests.filter(matchesFilter);
+  if (visible.length === 0) {
+    toast.textContent = 'No requests to copy';
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2000);
+    return;
+  }
+  const text = visible.map((r, i) => formatRequest(r, i)).join('\n');
+  const header = `Network Capture — ${visible.length} request(s) — ${new Date().toISOString()}\n\n`;
+  copyToClipboard(header + text);
+});
+</script>
+</body>
+</html>
