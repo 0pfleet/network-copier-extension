@@ -161,7 +161,9 @@ export function formatRequest(
     lines.push("    Response Body:");
     lines.push(
       indentBody(
-        maybePrettyJson(truncate(request.responseBody, opts.maxBodyLength)),
+        maybePrettyJson(
+          maybeRedactBody(truncate(request.responseBody, opts.maxBodyLength))
+        ),
         6
       )
     );
@@ -290,7 +292,7 @@ export function formatRequestDetail(request: CapturedRequest): string {
 
   if (request.responseBody) {
     lines.push("RESPONSE BODY:");
-    lines.push(indentBody(maybePrettyJson(request.responseBody), 2));
+    lines.push(indentBody(maybePrettyJson(maybeRedactBody(request.responseBody)), 2));
     lines.push("");
   }
 
@@ -400,13 +402,36 @@ const SENSITIVE_BODY_KEYS = new Set([
 ]);
 
 function maybeRedactBody(text: string): string {
+  // Try JSON first
   try {
     const obj = JSON.parse(text);
     const redacted = redactObject(obj);
     return JSON.stringify(redacted);
   } catch {
-    return text;
+    // Fall through to form-urlencoded handling
   }
+
+  // Try form-urlencoded (key=value&key=value)
+  if (text.includes("=") && !text.includes("<")) {
+    try {
+      const params = new URLSearchParams(text);
+      let redacted = false;
+      const entries: string[] = [];
+      for (const [key, value] of params) {
+        if (SENSITIVE_BODY_KEYS.has(key.toLowerCase())) {
+          entries.push(`${key}=[REDACTED]`);
+          redacted = true;
+        } else {
+          entries.push(`${key}=${value}`);
+        }
+      }
+      if (redacted) return entries.join("&");
+    } catch {
+      // Not valid form-urlencoded, return as-is
+    }
+  }
+
+  return text;
 }
 
 function redactObject(obj: unknown): unknown {
