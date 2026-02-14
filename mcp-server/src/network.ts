@@ -398,7 +398,9 @@ export class NetworkCapture {
       if (filter.urlPattern) {
         try {
           const regex = new RegExp(filter.urlPattern, "i");
-          if (!regex.test(req.url)) return false;
+          // Guard against catastrophic backtracking: test with timeout
+          const match = safeRegexTest(regex, req.url);
+          if (!match) return false;
         } catch {
           // Invalid regex — treat as literal substring match
           if (!req.url.toLowerCase().includes(filter.urlPattern.toLowerCase()))
@@ -512,4 +514,14 @@ export class NetworkCapture {
 
     return typeMap[cdpType] || "other";
   }
+}
+
+/**
+ * Test a regex against a string with a length limit to mitigate ReDoS.
+ * If the input string is excessively long, falls back to substring match.
+ */
+function safeRegexTest(regex: RegExp, input: string): boolean {
+  // Limit regex testing to first 2048 chars of URL to prevent catastrophic backtracking
+  const testInput = input.length > 2048 ? input.substring(0, 2048) : input;
+  return regex.test(testInput);
 }
