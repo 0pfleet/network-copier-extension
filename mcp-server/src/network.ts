@@ -64,6 +64,12 @@ export class NetworkCapture {
   /** Callback for when a request completes */
   onRequestComplete?: (request: CapturedRequest) => void;
 
+  /**
+   * Generation counter to guard against race conditions.
+   * Incremented on clear() — async body fetches check this before finalizing.
+   */
+  private generation = 0;
+
   constructor(options?: NetworkCaptureOptions) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
   }
@@ -226,8 +232,11 @@ export class NetworkCapture {
 
     // Fetch response body asynchronously if callback provided
     if (getResponseBody && this.shouldFetchBody(entry.request)) {
+      const gen = this.generation;
       getResponseBody(params.requestId)
         .then((result) => {
+          // Guard: if clear() was called during the fetch, discard
+          if (this.generation !== gen) return;
           if (result) {
             entry.request.responseBody = this.truncateBody(
               result.body,
@@ -237,6 +246,7 @@ export class NetworkCapture {
           this.finalizeRequest(params.requestId, entry.request);
         })
         .catch(() => {
+          if (this.generation !== gen) return;
           this.finalizeRequest(params.requestId, entry.request);
         });
     } else {
@@ -330,6 +340,7 @@ export class NetworkCapture {
     this.pending.clear();
     this.nextIndex = 0;
     this.timestampOffset = null;
+    this.generation++;
   }
 
   // ── Internal Methods ──
@@ -340,7 +351,30 @@ export class NetworkCapture {
   ): void {
     this.pending.delete(requestId);
 
-    const request = partial as CapturedRequest;
+    // Ensure required fields have safe defaults before treating as complete
+    const request: CapturedRequest = {
+      id: partial.id || requestId,
+      index: partial.index ?? this.nextIndex++,
+      url: partial.url || "",
+      method: partial.method || "GET",
+      requestHeaders: partial.requestHeaders || {},
+      requestBody: partial.requestBody,
+      status: partial.status ?? 0,
+      statusText: partial.statusText || "",
+      responseHeaders: partial.responseHeaders || {},
+      responseBody: partial.responseBody,
+      mimeType: partial.mimeType || "",
+      responseSize: partial.responseSize ?? 0,
+      resourceType: partial.resourceType || "other",
+      initiator: partial.initiator || { type: "other" },
+      timing: partial.timing || { startTime: 0 },
+      redirectChain: partial.redirectChain || [],
+      preflightFor: partial.preflightFor,
+      preflightRequestId: partial.preflightRequestId,
+      correlatedActionId: partial.correlatedActionId,
+      correlationConfidence: partial.correlationConfidence,
+      correlationMethod: partial.correlationMethod,
+    };
 
     // Enforce ring buffer size
     if (this.requests.size >= this.options.maxRequests) {

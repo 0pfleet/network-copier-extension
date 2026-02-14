@@ -602,10 +602,22 @@ export class Correlator {
       const gap = next.timing.startTime - current.timing.endTime;
       if (gap >= 0 && gap <= 50) {
         // Very tight timing suggests sequential dependency
+        let currentPath: string;
+        let nextPath: string;
+        try {
+          currentPath = new URL(current.url).pathname;
+        } catch {
+          currentPath = current.url;
+        }
+        try {
+          nextPath = new URL(next.url).pathname;
+        } catch {
+          nextPath = next.url;
+        }
         chains.push({
           type: "sequential",
           requestIds: [current.id, next.id],
-          description: `Sequential: ${current.method} ${new URL(current.url).pathname} → ${next.method} ${new URL(next.url).pathname} (${gap.toFixed(0)}ms gap)`,
+          description: `Sequential: ${current.method} ${currentPath} → ${next.method} ${nextPath} (${gap.toFixed(0)}ms gap)`,
         });
       }
     }

@@ -367,7 +367,7 @@ export class BrowserManager {
   ): Promise<void> {
     const startTime = Date.now();
     let lastActivityTime = Date.now();
-    const initialPending = this.capture.pendingCount;
+    let lastPending = this.capture.pendingCount;
 
     const checkInterval = 100;
 
@@ -376,11 +376,14 @@ export class BrowserManager {
         const now = Date.now();
         const currentPending = this.capture.pendingCount;
 
-        if (currentPending !== initialPending) {
+        // Track any change in pending count (up or down) as activity
+        if (currentPending !== lastPending) {
           lastActivityTime = now;
+          lastPending = currentPending;
         }
 
-        if (now - lastActivityTime >= quietPeriodMs) {
+        // Require both: no activity for quietPeriodMs AND zero pending requests
+        if (currentPending === 0 && now - lastActivityTime >= quietPeriodMs) {
           resolve();
           return;
         }
