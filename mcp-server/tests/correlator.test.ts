@@ -722,5 +722,250 @@ describe("Correlator", () => {
       const match = correlator.correlateRequest(request, [request]);
       expect(match).toBeNull();
     });
+
+    it("should handle multiple actions with identical timestamps competing for same request", () => {
+      const now = Date.now();
+
+      // Two actions at the exact same timestamp
+      correlator.recordAction(
+        createAction({
+          id: "action_a",
+          type: "click",
+          targetDescription: 'button "Save"',
+          timestamp: now,
+        })
+      );
+      correlator.recordAction(
+        createAction({
+          id: "action_b",
+          type: "click",
+          targetDescription: 'button "Submit"',
+          timestamp: now,
+        })
+      );
+
+      const request: CapturedRequest = {
+        id: "req_api",
+        index: 0,
+        url: "https://api.example.com/save",
+        method: "POST",
+        requestHeaders: {},
+        status: 200,
+        statusText: "OK",
+        responseHeaders: {},
+        mimeType: "application/json",
+        responseSize: 100,
+        resourceType: "fetch",
+        initiator: { type: "script" },
+        timing: { startTime: now + 10 },
+        redirectChain: [],
+      };
+
+      // Should not crash, should pick one deterministically
+      const match = correlator.correlateRequest(request, [request]);
+      expect(match).not.toBeNull();
+      expect(["action_a", "action_b"]).toContain(match!.action.id);
+    });
+
+    it("should return null when all candidates score below minConfidence", () => {
+      const now = Date.now();
+
+      // Action that's far in time and semantically mismatched
+      correlator.recordAction(
+        createAction({
+          id: "action_old",
+          type: "scroll",
+          targetDescription: "window scroll",
+          timestamp: now - 1900, // almost at the edge of the 2000ms window
+        })
+      );
+
+      const request: CapturedRequest = {
+        id: "req_analytics",
+        index: 0,
+        url: "https://www.google-analytics.com/collect?v=1",
+        method: "POST",
+        requestHeaders: {},
+        status: 200,
+        statusText: "OK",
+        responseHeaders: {},
+        mimeType: "image/gif",
+        responseSize: 35,
+        resourceType: "xhr",
+        initiator: { type: "script" },
+        timing: { startTime: now },
+        redirectChain: [],
+      };
+
+      // Scroll + analytics URL + far timing → very low score, should be null
+      const match = correlator.correlateRequest(request, [request]);
+      expect(match).toBeNull();
+    });
+
+    it("should use temporal chain correlation (matchByChain 100ms window)", () => {
+      const now = Date.now();
+
+      correlator.recordAction(
+        createAction({
+          id: "action_click",
+          type: "click",
+          targetDescription: 'button "Load"',
+          timestamp: now,
+        })
+      );
+
+      // First request: directly correlated to the action, finishes late
+      const parent: CapturedRequest = {
+        id: "req_parent",
+        index: 0,
+        url: "https://api.example.com/data",
+        method: "GET",
+        requestHeaders: {},
+        status: 200,
+        statusText: "OK",
+        responseHeaders: {},
+        mimeType: "application/json",
+        responseSize: 500,
+        resourceType: "fetch",
+        initiator: { type: "script" },
+        timing: { startTime: now + 10, endTime: now + 2400, duration: 2390 },
+        redirectChain: [],
+        correlatedActionId: "action_click",
+        correlationConfidence: 0.7,
+        correlationMethod: "timing_semantic",
+      };
+
+      // Second request: starts 50ms after parent ends (within 100ms chain window)
+      // AND outside the action's 2s correlation window (now + 2450 > now + 2000)
+      const child: CapturedRequest = {
+        id: "req_child",
+        index: 1,
+        url: "https://api.example.com/details",
+        method: "GET",
+        requestHeaders: {},
+        status: 200,
+        statusText: "OK",
+        responseHeaders: {},
+        mimeType: "application/json",
+        responseSize: 200,
+        resourceType: "fetch",
+        initiator: { type: "script" },
+        timing: { startTime: now + 2450 },
+        redirectChain: [],
+      };
+
+      const match = correlator.correlateRequest(child, [parent, child]);
+      expect(match).not.toBeNull();
+      expect(match!.method).toBe("chain");
+      expect(match!.action.id).toBe("action_click");
+      expect(match!.confidence).toBe(0.5);
+    });
+
+    it("should skip already-correlated requests in correlateAll", () => {
+      const now = Date.now();
+
+      correlator.recordAction(
+        createAction({
+          id: "action_1",
+          type: "click",
+          targetDescription: 'button "Test"',
+          timestamp: now,
+        })
+      );
+
+      const requests: CapturedRequest[] = [
+        {
+          id: "req_already",
+          index: 0,
+          url: "https://api.example.com/already-done",
+          method: "GET",
+          requestHeaders: {},
+          status: 200,
+          statusText: "OK",
+          responseHeaders: {},
+          mimeType: "application/json",
+          responseSize: 100,
+          resourceType: "fetch",
+          initiator: { type: "script" },
+          timing: { startTime: now + 10 },
+          redirectChain: [],
+          correlatedActionId: "action_other", // Already correlated
+        },
+        {
+          id: "req_new",
+          index: 1,
+          url: "https://api.example.com/new",
+          method: "POST",
+          requestHeaders: {},
+          status: 200,
+          statusText: "OK",
+          responseHeaders: {},
+          mimeType: "application/json",
+          responseSize: 200,
+          resourceType: "fetch",
+          initiator: { type: "script" },
+          timing: { startTime: now + 20 },
+          redirectChain: [],
+        },
+      ];
+
+      const results = correlator.correlateAll(requests);
+
+      // Only req_new should be processed
+      const allRequestIds = results.flatMap((r) => r.requests.map((req) => req.id));
+      expect(allRequestIds).toContain("req_new");
+      expect(allRequestIds).not.toContain("req_already");
+    });
+
+    it("should respect maxDepth limit in extractEventOrigin (>50 frames)", () => {
+      // Build a stack trace that's 52 levels deep with "click" at depth 51
+      let stack: any = {
+        description: "click",
+        callFrames: [
+          { functionName: "deepHandler", scriptId: "1", url: "app.js", lineNumber: 1, columnNumber: 0 },
+        ],
+      };
+
+      // Wrap it in 51 intermediate async frames
+      for (let i = 0; i < 51; i++) {
+        stack = {
+          description: "setTimeout",
+          callFrames: [
+            { functionName: `frame_${i}`, scriptId: "1", url: "app.js", lineNumber: i, columnNumber: 0 },
+          ],
+          parent: stack,
+        };
+      }
+
+      // extractEventOrigin should return null because click is beyond maxDepth of 50
+      const result = correlator.extractEventOrigin(stack);
+      expect(result).toBeNull();
+    });
+
+    it("should find event origin within maxDepth", () => {
+      // Stack trace with "click" at depth 3 (within limit)
+      const stack = {
+        callFrames: [
+          { functionName: "fetch", scriptId: "1", url: "app.js", lineNumber: 10, columnNumber: 0 },
+        ],
+        parent: {
+          description: "Promise.then",
+          callFrames: [
+            { functionName: "handler", scriptId: "1", url: "app.js", lineNumber: 20, columnNumber: 0 },
+          ],
+          parent: {
+            description: "click",
+            callFrames: [
+              { functionName: "onClick", scriptId: "1", url: "app.js", lineNumber: 30, columnNumber: 0 },
+            ],
+          },
+        },
+      };
+
+      const result = correlator.extractEventOrigin(stack);
+      expect(result).not.toBeNull();
+      expect(result!.eventType).toBe("click");
+      expect(result!.asyncDepth).toBe(2);
+    });
   });
 });
