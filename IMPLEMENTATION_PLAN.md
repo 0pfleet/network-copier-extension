@@ -234,40 +234,44 @@ tools:
 
 ## Implementation Phases
 
-### Phase 1: Enhanced Extension (2-3 days)
+### Phase 1: MCP Server Core (COMPLETED - Feb 2026)
 
-Upgrade current Network Copier to add:
+**Decision**: Build MCP server first (Option B) instead of extension enhancement.
+Rationale: Self-contained, single `npx` command, native MCP integration,
+zero installation friction. Extension bridge becomes Phase 3.
 
-1. **Action tracking**: Inject content script that monitors clicks, navigations, form submits
-2. **Request correlation**: Match requests to actions via timing + initiator
-3. **Better output format**: Include correlation data in copied text
-4. **Local WebSocket bridge**: Optional localhost server for agent access
+Implemented:
 
-Deliverable: Extension that can be used via copy/paste OR programmatic access
+1. **[x] Browser management** (`browser.ts`): Puppeteer launch/connect, CDP session
+2. **[x] CDP integration** (`network.ts`): Full Network domain capture with ring buffer
+3. **[x] Action→Request correlation** (`correlator.ts`): 4-layer engine (stack traces, timing+semantic, timing-only, chain)
+4. **[x] MCP tools** (`index.ts`): 6 tools — browser_navigate, browser_click, browser_type, get_network_log, get_request_detail, clear_capture
+5. **[x] Agent-friendly formatting** (`formatter.ts`): Structured output with redaction
+6. **[x] Test suite**: 63 unit tests across 3 suites
+7. **[x] Chain detection**: Redirect chains, CORS preflights, auth flows, sequential deps
 
-### Phase 2: MCP Server (3-4 days)
+Deliverable: `mcp-server/` with full TypeScript implementation
 
-Build standalone MCP server:
+### Phase 2: Integration Testing & Polish (IN PROGRESS)
 
-1. **Browser management**: Launch/connect to Chrome via Puppeteer
-2. **CDP integration**: Full Network domain access
-3. **Action→Request tracking**: Automatic correlation
-4. **MCP tools**: navigate, click, type, get_network, explain_request
-5. **Agent-friendly formatting**: Structured output optimized for LLM consumption
+1. [ ] End-to-end integration test with real browser
+2. [ ] CI pipeline with behavior-specific tests
+3. [ ] Publish to npm as `@0pfleet/network-intelligence-mcp`
+4. [ ] Test with Claude Code on real debugging scenarios
 
-Deliverable: `npx @0pfleet/network-intelligence-mcp`
+### Phase 3: Extension Bridge (PLANNED)
 
-### Phase 3: Hybrid Bridge (2 days)
+Connect the existing Network Copier extension to the MCP server:
 
-Connect extension to MCP:
-
-1. **Native Messaging host**: Bridge between extension and MCP server
-2. **Bidirectional**: Agent can query extension's captured data
+1. **Native Messaging host**: Bridge between extension and MCP server process
+2. **Extension enhancement**: Add content script for action tracking
 3. **Session preservation**: Use existing auth from user's browser
+4. **MV3 compatible**: Service worker + native messaging keepalive
 
-Deliverable: Single solution that works both ways
+Key research finding: MV3 extensions cannot run WebSocket servers.
+Native Messaging Host is the only viable bridge pattern.
 
-### Phase 4: Publishing (1-2 days)
+### Phase 4: Publishing (PLANNED)
 
 1. **MCP Registry**: Register server at registry.modelcontextprotocol.io
 2. **Chrome Web Store**: Publish polished extension
@@ -331,22 +335,24 @@ Connect to ws://localhost:9876 to receive network data from the user's active br
 
 ## Open Questions
 
-1. **Sensitive data handling**: How to redact auth tokens, passwords in output?
-2. **Large responses**: Truncation strategy? Streaming?
-3. **WebSocket traffic**: Include or separate tool?
-4. **Service Workers**: How to capture SW-intercepted requests?
-5. **Cross-origin iframes**: Capture or ignore?
+1. ~~**Sensitive data handling**: How to redact auth tokens, passwords in output?~~
+   **RESOLVED**: Implemented in `formatter.ts` — passwords, tokens, cookies redacted automatically
+2. ~~**Large responses**: Truncation strategy? Streaming?~~
+   **RESOLVED**: Configurable `maxResponseBodySize` (default 512KB), binary bodies skipped
+3. **WebSocket traffic**: Include or separate tool? (defer to Phase 2)
+4. **Service Workers**: How to capture SW-intercepted requests? (defer to Phase 3)
+5. **Cross-origin iframes**: Capture or ignore? (defer to Phase 2)
 
 ---
 
 ## Next Steps
 
-1. [ ] Decide: Start with Extension enhancement or MCP server?
-2. [ ] Design: Finalize output format with real-world examples
-3. [ ] Build: Phase 1 implementation
-4. [ ] Test: Use it ourselves for a week
-5. [ ] Iterate: Based on real usage patterns
-6. [ ] Publish: When genuinely useful
+1. [x] Decide: Start with MCP server (Option B) — validated by research
+2. [x] Design: Output format with correlation, chains, redaction
+3. [x] Build: Phase 1 (MCP server core)
+4. [ ] Test: End-to-end integration tests with real browser
+5. [ ] CI: Behavior-specific test pipeline
+6. [ ] Publish: npm + MCP registry when validated
 
 ---
 
