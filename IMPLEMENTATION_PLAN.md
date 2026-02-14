@@ -247,8 +247,10 @@ Implemented:
 3. **[x] Action→Request correlation** (`correlator.ts`): 4-layer engine (stack traces, timing+semantic, timing-only, chain)
 4. **[x] MCP tools** (`index.ts`): 6 tools — browser_navigate, browser_click, browser_type, get_network_log, get_request_detail, clear_capture
 5. **[x] Agent-friendly formatting** (`formatter.ts`): Structured output with redaction
-6. **[x] Test suite**: 63 unit tests across 3 suites
+6. **[x] Test suite**: 83 unit tests across 3 suites (network: 31, correlator: 27, formatter: 25)
 7. **[x] Chain detection**: Redirect chains, CORS preflights, auth flows, sequential deps
+8. **[x] Safety hardening**: Unsafe cast removal, URL crash fix, race condition guard, ReDoS protection
+9. **[x] Redaction completeness**: Response body redaction, form-urlencoded passwords, expanded sensitive key list
 
 Deliverable: `mcp-server/` with full TypeScript implementation
 
@@ -258,6 +260,8 @@ Deliverable: `mcp-server/` with full TypeScript implementation
 2. [ ] CI pipeline with behavior-specific tests
 3. [ ] Publish to npm as `@0pfleet/network-intelligence-mcp`
 4. [ ] Test with Claude Code on real debugging scenarios
+5. [ ] browser.ts integration tests (currently unit-test-free, needs Puppeteer mocking or real browser)
+6. [ ] index.ts MCP server tests (tool input validation, error handling)
 
 ### Phase 3: Extension Bridge (PLANNED)
 
@@ -350,9 +354,11 @@ Connect to ws://localhost:9876 to receive network data from the user's active br
 1. [x] Decide: Start with MCP server (Option B) — validated by research
 2. [x] Design: Output format with correlation, chains, redaction
 3. [x] Build: Phase 1 (MCP server core)
-4. [ ] Test: End-to-end integration tests with real browser
-5. [ ] CI: Behavior-specific test pipeline
-6. [ ] Publish: npm + MCP registry when validated
+4. [x] Harden: Safety fixes (unsafe cast, URL crash, race condition, ReDoS, redaction gaps)
+5. [x] Test: 83 unit tests covering critical paths, edge cases, and security
+6. [ ] Test: End-to-end integration tests with real browser
+7. [ ] CI: Behavior-specific test pipeline
+8. [ ] Publish: npm + MCP registry when validated
 
 ---
 

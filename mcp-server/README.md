@@ -173,7 +173,7 @@ Automatically detects:
 cd mcp-server
 npm install
 npm run build      # Compile TypeScript
-npm test           # Run 63 unit tests
+npm test           # Run 83 unit tests
 npm run test:watch # Watch mode
 npm run lint       # Type-check
 ```
@@ -184,9 +184,9 @@ npm run lint       # Type-check
 tests/
   fixtures/
     cdp-events.ts       # Realistic CDP event fixtures (login, redirect, CORS, etc.)
-  network.test.ts       # 22 tests: capture lifecycle, filtering, ring buffer, timing
-  correlator.test.ts    # 20 tests: stack traces, scoring, chain detection, edge cases
-  formatter.test.ts     # 21 tests: output formatting, redaction, JSON pretty-print
+  network.test.ts       # 31 tests: capture lifecycle, filtering, ring buffer, timing, body handling, preflight ordering
+  correlator.test.ts    # 27 tests: stack traces, scoring, chain detection, temporal chains, depth limits, edge cases
+  formatter.test.ts     # 25 tests: output formatting, redaction (JSON + form-urlencoded), nested fields, response bodies
 ```
 
 ## License
