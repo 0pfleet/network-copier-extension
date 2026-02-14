@@ -181,6 +181,61 @@ describe("Formatter", () => {
       expect(output).toContain("[REDACTED]");
       expect(output).not.toContain("secret123");
     });
+
+    it("should redact nested sensitive fields in request bodies", () => {
+      const output = formatRequest(
+        makeRequest({
+          requestBody: JSON.stringify({
+            user: {
+              email: "test@test.com",
+              password: "nested_secret",
+              profile: {
+                ssn: "123-45-6789",
+              },
+            },
+          }),
+        }),
+        1,
+        { includeRequestBody: true }
+      );
+      expect(output).toContain("test@test.com");
+      expect(output).not.toContain("nested_secret");
+      expect(output).not.toContain("123-45-6789");
+      // Both should be redacted
+      expect(output).toContain("[REDACTED]");
+    });
+
+    it("should redact form-urlencoded passwords", () => {
+      const output = formatRequest(
+        makeRequest({
+          requestBody: "email=test@test.com&password=secret123&remember=true",
+        }),
+        1,
+        { includeRequestBody: true }
+      );
+      expect(output).toContain("test@test.com");
+      expect(output).toContain("[REDACTED]");
+      expect(output).not.toContain("secret123");
+      expect(output).toContain("remember=true");
+    });
+
+    it("should redact sensitive fields in response bodies", () => {
+      const output = formatRequest(
+        makeRequest({
+          responseBody: JSON.stringify({
+            access_token: "eyJhbGciOiJIUzI1NiJ9.test.sig",
+            user: { id: 42, secret: "confidential_value" },
+          }),
+        }),
+        1,
+        { includeResponseBody: true }
+      );
+      expect(output).toContain("Response Body:");
+      expect(output).not.toContain("eyJhbGciOiJIUzI1NiJ9.test.sig");
+      expect(output).not.toContain("confidential_value");
+      expect(output).toContain("[REDACTED]");
+      expect(output).toContain('"id": 42');
+    });
   });
 
   describe("formatCorrelation", () => {
@@ -314,6 +369,21 @@ describe("Formatter", () => {
       expect(output).toContain("action_1");
       expect(output).toContain("0.95");
       expect(output).toContain("stack_trace");
+    });
+
+    it("should redact sensitive fields in response bodies", () => {
+      const request = makeRequest({
+        responseBody: JSON.stringify({
+          token: "super_secret_token_value",
+          user: { id: 42, name: "Oscar" },
+        }),
+      });
+
+      const output = formatRequestDetail(request);
+      expect(output).toContain("RESPONSE BODY:");
+      expect(output).not.toContain("super_secret_token_value");
+      expect(output).toContain("[REDACTED]");
+      expect(output).toContain("Oscar");
     });
 
     it("should include stack trace when present", () => {

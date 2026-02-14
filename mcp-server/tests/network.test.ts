@@ -354,6 +354,224 @@ describe("NetworkCapture", () => {
         }, 50);
       });
     });
+
+    it("should return base64 indicator for base64-encoded bodies", async () => {
+      const req = simpleGetRequest();
+      capture.handleRequestWillBeSent(req.willBeSent);
+      capture.handleResponseReceived(req.responseReceived);
+
+      capture.handleLoadingFinished(req.loadingFinished, async () => ({
+        body: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ",
+        base64Encoded: true,
+      }));
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const result = capture.getRequest("req_1");
+      expect(result!.responseBody).toContain("[base64 encoded");
+      expect(result!.responseBody).toContain("chars]");
+    });
+
+    it("should finalize request when body fetch callback rejects", async () => {
+      const req = simpleGetRequest();
+      capture.handleRequestWillBeSent(req.willBeSent);
+      capture.handleResponseReceived(req.responseReceived);
+
+      capture.handleLoadingFinished(req.loadingFinished, async () => {
+        throw new Error("Network.getResponseBody failed");
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Request should still be finalized without a body
+      const result = capture.getRequest("req_1");
+      expect(result).toBeDefined();
+      expect(result!.url).toBe("https://api.example.com/users");
+      expect(result!.responseBody).toBeUndefined();
+    });
+
+    it("should discard body fetch results after clear() (race condition guard)", async () => {
+      const req = simpleGetRequest();
+      capture.handleRequestWillBeSent(req.willBeSent);
+      capture.handleResponseReceived(req.responseReceived);
+
+      // Start a slow body fetch
+      capture.handleLoadingFinished(req.loadingFinished, async () => {
+        await new Promise((r) => setTimeout(r, 100));
+        return { body: "stale data", base64Encoded: false };
+      });
+
+      // Clear before the body fetch completes
+      await new Promise((r) => setTimeout(r, 20));
+      capture.clear();
+      expect(capture.size).toBe(0);
+
+      // Wait for the stale body fetch to complete
+      await new Promise((r) => setTimeout(r, 150));
+
+      // The stale request should NOT appear in the cleared store
+      expect(capture.size).toBe(0);
+      expect(capture.getRequest("req_1")).toBeUndefined();
+    });
+  });
+
+  describe("binary content body skipping", () => {
+    it("should skip body fetch for image responses", async () => {
+      const img = imageRequest();
+      const bodyCalled: string[] = [];
+
+      capture.handleRequestWillBeSent(img.willBeSent);
+      capture.handleResponseReceived(img.responseReceived);
+      capture.handleLoadingFinished(img.loadingFinished, async (id) => {
+        bodyCalled.push(id);
+        return { body: "should not be called", base64Encoded: false };
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const result = capture.getRequest("req_image");
+      expect(result).toBeDefined();
+      expect(bodyCalled).toHaveLength(0); // Body callback should not have been called
+      expect(result!.responseBody).toBeUndefined();
+    });
+
+    it("should skip body fetch for video responses", async () => {
+      const times = { wallTime: 1705312245.123, timestamp: 12345.0 };
+      const bodyCalled: string[] = [];
+
+      capture.handleRequestWillBeSent({
+        requestId: "req_video",
+        request: { url: "https://cdn.example.com/video.mp4", method: "GET", headers: {} },
+        ...times,
+        initiator: { type: "parser" },
+        type: "Media",
+      });
+      capture.handleResponseReceived({
+        requestId: "req_video",
+        response: {
+          url: "https://cdn.example.com/video.mp4",
+          status: 200, statusText: "OK", headers: {},
+          mimeType: "video/mp4",
+        },
+        timestamp: times.timestamp + 0.5,
+      });
+      capture.handleLoadingFinished(
+        { requestId: "req_video", timestamp: times.timestamp + 0.6, encodedDataLength: 5000000 },
+        async (id) => { bodyCalled.push(id); return { body: "x", base64Encoded: true }; }
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+      expect(bodyCalled).toHaveLength(0);
+    });
+
+    it("should skip body fetch for font responses", async () => {
+      const times = { wallTime: 1705312246.0, timestamp: 12346.0 };
+      const bodyCalled: string[] = [];
+
+      capture.handleRequestWillBeSent({
+        requestId: "req_font",
+        request: { url: "https://cdn.example.com/font.woff2", method: "GET", headers: {} },
+        ...times,
+        initiator: { type: "parser" },
+        type: "Font",
+      });
+      capture.handleResponseReceived({
+        requestId: "req_font",
+        response: {
+          url: "https://cdn.example.com/font.woff2",
+          status: 200, statusText: "OK", headers: {},
+          mimeType: "font/woff2",
+        },
+        timestamp: times.timestamp + 0.1,
+      });
+      capture.handleLoadingFinished(
+        { requestId: "req_font", timestamp: times.timestamp + 0.11, encodedDataLength: 50000 },
+        async (id) => { bodyCalled.push(id); return { body: "x", base64Encoded: true }; }
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+      expect(bodyCalled).toHaveLength(0);
+    });
+
+    it("should skip body fetch for audio responses", async () => {
+      const times = { wallTime: 1705312247.0, timestamp: 12347.0 };
+      const bodyCalled: string[] = [];
+
+      capture.handleRequestWillBeSent({
+        requestId: "req_audio",
+        request: { url: "https://cdn.example.com/sound.mp3", method: "GET", headers: {} },
+        ...times,
+        initiator: { type: "parser" },
+        type: "Media",
+      });
+      capture.handleResponseReceived({
+        requestId: "req_audio",
+        response: {
+          url: "https://cdn.example.com/sound.mp3",
+          status: 200, statusText: "OK", headers: {},
+          mimeType: "audio/mpeg",
+        },
+        timestamp: times.timestamp + 0.3,
+      });
+      capture.handleLoadingFinished(
+        { requestId: "req_audio", timestamp: times.timestamp + 0.31, encodedDataLength: 100000 },
+        async (id) => { bodyCalled.push(id); return { body: "x", base64Encoded: true }; }
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+      expect(bodyCalled).toHaveLength(0);
+    });
+
+    it("should skip body fetch for wasm responses", async () => {
+      const times = { wallTime: 1705312248.0, timestamp: 12348.0 };
+      const bodyCalled: string[] = [];
+
+      capture.handleRequestWillBeSent({
+        requestId: "req_wasm",
+        request: { url: "https://cdn.example.com/module.wasm", method: "GET", headers: {} },
+        ...times,
+        initiator: { type: "script" },
+        type: "Other",
+      });
+      capture.handleResponseReceived({
+        requestId: "req_wasm",
+        response: {
+          url: "https://cdn.example.com/module.wasm",
+          status: 200, statusText: "OK", headers: {},
+          mimeType: "application/wasm",
+        },
+        timestamp: times.timestamp + 0.2,
+      });
+      capture.handleLoadingFinished(
+        { requestId: "req_wasm", timestamp: times.timestamp + 0.21, encodedDataLength: 200000 },
+        async (id) => { bodyCalled.push(id); return { body: "x", base64Encoded: true }; }
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+      expect(bodyCalled).toHaveLength(0);
+    });
+  });
+
+  describe("preflight reverse ordering", () => {
+    it("should pair correctly when actual request arrives before preflight", () => {
+      const cors = corsPreflightPair();
+
+      // Process actual request FIRST (reverse order)
+      capture.handleRequestWillBeSent(cors.actual.willBeSent);
+      capture.handleResponseReceived(cors.actual.responseReceived);
+      capture.handleLoadingFinished(cors.actual.loadingFinished);
+
+      // Then process preflight
+      capture.handleRequestWillBeSent(cors.preflight.willBeSent);
+      capture.handleResponseReceived(cors.preflight.responseReceived);
+      capture.handleLoadingFinished(cors.preflight.loadingFinished);
+
+      const preflight = capture.getRequest("req_preflight");
+      const actual = capture.getRequest("req_actual");
+
+      expect(preflight!.preflightFor).toBe("req_actual");
+      expect(actual!.preflightRequestId).toBe("req_preflight");
+    });
   });
 
   describe("clear", () => {

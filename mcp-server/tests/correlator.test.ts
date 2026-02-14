@@ -536,6 +536,69 @@ describe("Correlator", () => {
       expect(seqChains).toHaveLength(1);
       expect(seqChains[0].requestIds).toEqual(["req_1", "req_2"]);
     });
+
+    it("should handle invalid/malformed URLs in sequential chain detection without crashing", () => {
+      const now = Date.now();
+
+      const requests: CapturedRequest[] = [
+        {
+          id: "req_data",
+          index: 0,
+          url: "data:text/html,<h1>Hello</h1>",
+          method: "GET",
+          requestHeaders: {},
+          status: 200,
+          statusText: "OK",
+          responseHeaders: {},
+          mimeType: "text/html",
+          responseSize: 100,
+          resourceType: "document",
+          initiator: { type: "other" },
+          timing: { startTime: now, endTime: now + 50, duration: 50 },
+          redirectChain: [],
+        },
+        {
+          id: "req_blob",
+          index: 1,
+          url: "blob:https://example.com/abc-123",
+          method: "GET",
+          requestHeaders: {},
+          status: 200,
+          statusText: "OK",
+          responseHeaders: {},
+          mimeType: "application/octet-stream",
+          responseSize: 500,
+          resourceType: "other",
+          initiator: { type: "script" },
+          timing: { startTime: now + 60, endTime: now + 100, duration: 40 },
+          redirectChain: [],
+        },
+        {
+          id: "req_empty",
+          index: 2,
+          url: "",
+          method: "GET",
+          requestHeaders: {},
+          status: 0,
+          statusText: "",
+          responseHeaders: {},
+          mimeType: "",
+          responseSize: 0,
+          resourceType: "other",
+          initiator: { type: "other" },
+          timing: { startTime: now + 110, endTime: now + 120, duration: 10 },
+          redirectChain: [],
+        },
+      ];
+
+      // Should not throw — previously would crash on `new URL("")`
+      expect(() => correlator.detectChains(requests)).not.toThrow();
+
+      const chains = correlator.detectChains(requests);
+      const seqChains = chains.filter((c) => c.type === "sequential");
+      // The data: and blob: URLs have tight timing, so they should be detected
+      expect(seqChains.length).toBeGreaterThanOrEqual(1);
+    });
   });
 
   describe("correlateAll", () => {
