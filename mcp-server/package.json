@@ -1,0 +1,44 @@
+{
+  "name": "@0pfleet/network-intelligence-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that gives AI agents network-level understanding of browser traffic with action-to-request correlation",
+  "type": "module",
+  "bin": {
+    "network-intelligence-mcp": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node build/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "tsc --noEmit"
+  },
+  "files": [
+    "build/"
+  ],
+  "keywords": [
+    "mcp",
+    "network",
+    "browser",
+    "devtools",
+    "ai-agents",
+    "chrome",
+    "puppeteer"
+  ],
+  "author": "0pfleet",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "puppeteer": "^24.37.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}
